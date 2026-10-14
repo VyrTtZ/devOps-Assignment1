@@ -10,6 +10,11 @@ from operator import itemgetter
 
 ec2 = boto3.resource("ec2")
 s3 = boto3.resource("s3")
+vpc = ec2.create_vpc(CidrBlock='172.16.0.0/16')
+subnet = vpc.create_subnet(CidrBlock='172.16.0.0./24')
+
+print(vpc.id)
+print(subnet.id)
 
 #FINDS THE NEWEST AMI-------------------------------------------------------------------------
 client = boto3.client('ec2')
@@ -30,6 +35,12 @@ response = client.describe_images(
 image_details = sorted(response['Images'],key=itemgetter('CreationDate'),reverse=True)
 ami_id = image_details[0]['ImageId']
 
+#CREATE A NEW SECURITY GROUP-------------------------------------------------------------------------
+
+securitygroup = ec2.create_security_group(GroupName='HTTP AND SSH', Description='lets ssh and http to the instance', VpcId=vpc.id)
+securitygroup.authorize_ingress(CidrIp='0.0.0.0/0', IpProtocol='tcp', FromPort=22, ToPort=22)
+securitygroup.authorize_ingress(CidrIp='0.0.0.0/0', IpProtocol='tcp', FromPort=-1, ToPort=80)
+
 #CREATES A NEW INSTANCE-------------------------------------------------------------------------
 
 new_instances = ec2.create_instances(
@@ -38,7 +49,8 @@ new_instances = ec2.create_instances(
     MinCount=1,
     MaxCount=1,
     InstanceType="t2.nano",
-    SecurityGroupIds=["sg-02b3af4bf861acaa6"],
+    SubnetId="subnet.id",
+    SecurityGroupIds=[securitygroup.id],
     UserData="""#!/bin/bash
 yum install httpd -y
 systemctl enable httpd
